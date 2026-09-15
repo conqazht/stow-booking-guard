@@ -1,106 +1,84 @@
 # STOW Booking Policy Guard
 
-> **Prototype** — Fixes a critical schedule policy precedence violation in [STOW](https://stow.mystorage.vn), MyStorage's AI personal assistant.
->
-> Built for the **Product Engineering Intern (AI-Native)** application at [MyStorage](https://mystorage.vn/career/product-engineering-intern/).
+> A pre-flight validation guard and evaluation suite enforcing business schedule policies and upsell gates for storage booking assistants.
 
 ---
 
-## The Bug
+## Problem Statement
 
-When a customer requests a move-in at **21:00 on Sunday 20/09/2026**, STOW responds:
+When conversational agents handle live booking flows, prompt-only constraints can fail to enforce strict business rules under edge cases. 
 
-> ✅ "Thời gian dọn vào: 21:00 Chủ Nhật, ngày 20/09/2026"
-> ⚠️ "...cách hiện tại hơn 3 ngày, hệ thống chưa thể xuất link thanh toán..."
+For example, when a customer requests a move-in at **21:00 on Sunday 20/09/2026**:
+- **Expected:** Rule precedence #1 (Sunday is non-working) should immediately BLOCK confirmation and route to CSKH, while Rule #2 warns of after-hours surcharges.
+- **Observed in production LLMs:** The model often latches onto lower-priority rules (e.g. `> 3 calendar days`), while prematurely acknowledging the invalid Sunday date/time and skipping mandatory add-on offers (such as protection plans).
 
-**What STOW got right:** It caught the ">3 calendar days" rule and refused to issue a payment link.
+## Solution Architecture
 
-**What STOW got wrong:** It completely missed two **higher-priority** violations:
-1. **Sunday is a non-working day** — the policy says: *"do not confirm the date/time. Tell the customer CSKH will call back on the next working day."*
-2. **21:00 is after-hours** — the policy says: *"tell the customer an after-hours surcharge applies."*
+This repository implements a deterministic pre-flight guard layered before the booking capture tool call:
 
-By confirming "21:00 Sunday" as the move-in time, STOW risks a customer showing up at a closed facility.
+| Priority | Rule | Severity | Enforcement Action |
+|:---:|---|:---:|---|
+| **1** | Non-working day (Sunday / holiday) | **BLOCK** | Prohibits date confirmation; triggers next-working-day callback |
+| **2** | Off-hours (before 09:00 or ≥ 18:00) | **WARN** | Flags after-hours surcharge; requires CSKH schedule confirmation |
+| **3** | Self Storage > 3 calendar days | **DEFER** | Suppresses automated payment link; defers to team availability check |
+| **4** | Valid schedule | **OK** | Proceeds with automated booking flow |
 
-Additionally, STOW **skipped the mandatory protection plan upsell** (Step 8 in the internal booking flow requires asking the customer to choose Basic/Silver/Gold/Platinum *before* calling `captureBooking`).
+Additionally, a **Protection Plan Guard** gates the flow until the customer explicitly selects or declines a coverage tier (Basic, Silver, Gold, Platinum).
 
-## The Fix
+### Timezone Integrity (UTC+7)
 
-This prototype implements a **pre-flight guard** that evaluates every booking request against MyStorage's `BOOKING_SCHEDULE_POLICY` in the correct precedence order:
+All calendar and time calculations use explicit Vietnam time (Asia/Ho_Chi_Minh, UTC+7) offset arithmetic. This ensures invariant behavior across cloud runtimes (e.g. AWS Lambda, Vercel Edge) that execute in UTC.
 
-| Priority | Rule | Severity | Action |
-|----------|------|----------|--------|
-| 1 | Non-working day (Sunday / holiday) | BLOCK | Do NOT confirm date. Route to CSKH. |
-| 2 | Off-hours (before 09:00 or ≥ 18:00) | WARN | Warn about surcharge. CSKH confirms time. |
-| 3 | Self Storage > 3 calendar days | DEFER | No payment link. Sales checks availability. |
-| 4 | All clear | OK | Proceed with booking. |
-
-A separate **protection plan guard** ensures the upsell step cannot be skipped.
-
-### Key Design Decision: Timezone Handling
-
-All date/time math uses explicit UTC+7 offset arithmetic, never `new Date().getDay()` or other runtime-local methods. This prevents timezone bugs when deployed on serverless platforms (Vercel, AWS Lambda) that run in UTC.
+---
 
 ## Quick Start
 
+### 1. Install Dependencies
 ```bash
-# Install dependencies
 npm install
-
-# Run the evaluation suite (10 test cases)
-npm test
-
-# Open the interactive web demo
-npx serve web
-# Then open http://localhost:3000
 ```
+
+### 2. Run Evaluation Suite (11 Test Cases)
+```bash
+npm test
+```
+
+### 3. Run Interactive Side-by-Side Web Demo
+```bash
+npx serve web
+# Open http://localhost:3000 in your browser
+```
+
+---
 
 ## Project Structure
 
 ```
 src/
-  types.ts              # Shared type definitions
-  schedule-guard.ts     # Schedule policy evaluation (4 rules, precedence order)
-  protection-guard.ts   # Protection plan upsell gate
-  format-response.ts    # Combined pre-flight check
+  ├── types.ts              # Domain types, policy violations & severity levels
+  ├── schedule-guard.ts     # Precedence-ordered schedule policy logic (UTC+7)
+  ├── protection-guard.ts   # Protection plan upsell gate
+  └── format-response.ts    # Consolidated pre-flight evaluation & messaging
 tests/
-  eval-suite.test.ts    # 10 test cases including exact reproduction of the bug
+  └── eval-suite.test.ts    # 11 automated test cases with vitest
 web/
-  index.html            # Interactive demo (no build step needed)
+  └── index.html            # Side-by-side interactive comparison demo
 ```
-
-## Evaluation Suite
-
-| # | Scenario | Expected | What STOW does |
-|---|----------|----------|----------------|
-| 1 | 21:00 Sun 20/09 — Self Storage | BLOCK (Sunday) | ⚠️ Only catches ">3 days" |
-| 2 | 10:00 Wed 17/09 — Self Storage | OK | ✅ |
-| 3 | 20:00 Tue 16/09 — Self Storage | WARN (off-hours) | ❓ Untested |
-| 4 | 10:00 Sat 27/09 — Self Storage | DEFER (>3 days) | ✅ |
-| 5 | 10:00 Sat 27/09 — Valet | OK (no 3-day rule) | ✅ |
-| 6 | 10:00 National Day 02/09 | BLOCK (holiday) | ❓ Untested |
-| 7 | Protection = null | Block captureBooking | ⚠️ Skips entirely |
-| 8 | Protection = BASIC | Allow | ✅ |
-| 9 | Sun + no protection (combined) | 2+ messages, not ready | ⚠️ Fails |
-| 10 | Wed 10:00 + BASIC (happy path) | Ready to book | ✅ |
-
-## What Claude Code Produced That I Rejected
-
-1. **Timezone bug:** Initial code used `new Date(dateString).getDay()` — this uses the runtime's local timezone. On Vercel (UTC), `21:00 Sunday Vietnam time` = `14:00 Sunday UTC` (same day by coincidence), but `01:00 Monday Vietnam` = `18:00 Sunday UTC` (flips the day). Rewrote with explicit `+07:00` offset arithmetic.
-
-2. **Holiday check with `toLocaleDateString`:** Claude suggested using `Intl.DateTimeFormat` for holiday matching, which is locale-dependent and unreliable in CI/serverless. Replaced with simple UTC-offset string comparison.
-
-3. **Missing precedence order:** The first draft evaluated all rules independently and returned them as a flat list. The policy explicitly defines a precedence hierarchy where higher-priority rules should suppress lower ones in the customer message. Restructured to evaluate sequentially and flag the *highest* severity.
-
-## Hours Spent
-
-~5 hours total (audit: ~1.5h, prototype: ~3h, documentation: ~0.5h)
-
-## What I'd Do With Two More Hours
-
-1. **Prompt rewrite:** Draft a replacement `BOOKING_SCHEDULE_POLICY` section for STOW's system prompt that enforces the precedence order directly in the LLM's reasoning, with explicit "check this BEFORE that" instructions.
-2. **Lunar holiday support:** Integrate a Vietnamese lunar calendar API to cover Tết and Hùng Kings' Day, which are currently missing from the fixed-date holiday list.
-3. **Integration test with Gemini API:** Use the Gemini SDK to simulate full booking conversations and verify the guard's output matches expected agent behavior end-to-end.
 
 ---
 
-*Built by Trương Công Anh — September 2026*
+## Evaluation Suite Summary
+
+| # | Scenario | Severity | Guard Action |
+|---|----------|:---:|---|
+| 1 | 21:00 Sun 20/09 — Self Storage | `BLOCK` | Blocks Sunday move-in; triggers Monday CSKH callback |
+| 2 | 10:00 Wed 17/09 — Self Storage | `OK` | Normal working hours within 3 days; approved |
+| 3 | 20:00 Tue 16/09 — Self Storage | `WARN` | Flags after-hours surcharge; requires team confirmation |
+| 4 | 10:00 Sat 26/09 — Self Storage | `DEFER` | Defers automated payment link (> 3 days); routes to Sales |
+| 5 | 10:00 Sat 26/09 — Valet Storage | `OK` | Valet policy exempt from 3-day rule; schedule approved |
+| 6 | 10:00 National Day 02/09 | `BLOCK` | Detects public holiday; blocks confirmation |
+| 7 | Protection Plan = `null` | `GATE` | Blocks booking until customer selects/declines protection tier |
+| 8 | Protection Plan = `BASIC` | `OK` | Protection resolved; allowed to proceed |
+| 9 | Protection Plan = `GOLD` | `OK` | Protection resolved; allowed to proceed |
+| 10 | Sun 21:00 + No Protection | `BLOCK` | Aggregates multiple violations; halts booking capture |
+| 11 | Wed 10:00 + BASIC (Happy path) | `READY` | Full pre-flight passed; ready for payment link |
