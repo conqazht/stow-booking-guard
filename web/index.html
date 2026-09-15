@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>STOW Booking Guard — Chat Demo</title>
+  <style>
+    :root {
+      --brand: #0f766e;
+      --brand-light: #ccfbf1;
+      --red: #dc2626;
+      --red-bg: #fef2f2;
+      --red-light: #fca5a5;
+      --green: #16a34a;
+      --green-bg: #f0fdf4;
+      --green-light: #86efac;
+      --amber: #d97706;
+      --amber-bg: #fffbeb;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-500: #6b7280;
+      --gray-600: #4b5563;
+      --gray-900: #111827;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--gray-100);
+      color: var(--gray-900);
+      line-height: 1.5;
+    }
+
+    /* Header */
+    .header {
+      background: var(--brand);
+      color: #fff;
+      padding: 16px 24px;
+      text-align: center;
+    }
+    .header h1 { font-size: 1.2rem; font-weight: 700; }
+    .header p { font-size: 0.8rem; opacity: 0.85; margin-top: 2px; }
+
+    /* Scenario buttons */
+    .scenarios {
+      background: #fff;
+      border-bottom: 1px solid var(--gray-200);
+      padding: 12px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+    }
+    .scenarios-label {
+      width: 100%;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--gray-500);
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+    .scenario-btn {
+      padding: 8px 14px;
+      border: 2px solid var(--gray-200);
+      border-radius: 20px;
+      background: #fff;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+    .scenario-btn:hover { border-color: var(--brand); background: var(--brand-light); }
+    .scenario-btn.active { border-color: var(--brand); background: var(--brand-light); color: var(--brand); font-weight: 700; }
+
+    /* Chat columns */
+    .chat-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      max-width: 1000px;
+      margin: 0 auto;
+      min-height: calc(100vh - 200px);
+    }
+    .chat-col {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--gray-200);
+    }
+    .chat-col:last-child { border-right: none; }
+    .chat-col-header {
+      padding: 12px 16px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .chat-col.old .chat-col-header {
+      background: var(--red-bg);
+      color: var(--red);
+      border-bottom: 2px solid var(--red-light);
+    }
+    .chat-col.new .chat-col-header {
+      background: var(--green-bg);
+      color: var(--green);
+      border-bottom: 2px solid var(--green-light);
+    }
+    .chat-messages {
+      flex: 1;
+      padding: 16px;
+      background: var(--gray-50);
+      overflow-y: auto;
+    }
+
+    /* Chat bubbles */
+    .msg {
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+    }
+    .msg.user { align-items: flex-end; }
+    .msg.bot { align-items: flex-start; }
+    .msg-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin-bottom: 3px;
+      padding: 0 8px;
+    }
+    .msg.user .msg-label { color: var(--gray-500); }
+    .msg.bot .msg-label { color: var(--brand); }
+    .bubble {
+      max-width: 90%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      font-size: 0.88rem;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+    .msg.user .bubble {
+      background: var(--brand);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .msg.bot .bubble {
+      background: #fff;
+      border: 1px solid var(--gray-200);
+      border-bottom-left-radius: 4px;
+    }
+
+    /* Highlights inside bubbles */
+    .bubble .bug {
+      background: var(--red-bg);
+      color: var(--red);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.82rem;
+    }
+    .bubble .fix {
+      background: var(--green-bg);
+      color: var(--green);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.82rem;
+    }
+    .bubble .warn-tag {
+      background: var(--amber-bg);
+      color: var(--amber);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.82rem;
+    }
+
+    /* Verdict banner */
+    .verdict {
+      padding: 10px 16px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+    .chat-col.old .verdict { background: var(--red-bg); color: var(--red); }
+    .chat-col.new .verdict { background: var(--green-bg); color: var(--green); }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 16px;
+      font-size: 0.75rem;
+      color: var(--gray-500);
+      background: #fff;
+      border-top: 1px solid var(--gray-200);
+    }
+
+    /* Mobile */
+    @media (max-width: 640px) {
+      .chat-container { grid-template-columns: 1fr; }
+      .chat-col { border-right: none; border-bottom: 1px solid var(--gray-200); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>🛡️ STOW Booking Policy Guard</h1>
+    <p>So sánh: Bot STOW hiện tại (❌ có lỗi) vs Bot STOW đã sửa (✅ có Guard)</p>
+  </div>
+
+  <div class="scenarios">
+    <div class="scenarios-label">👆 Chọn tình huống để xem cách 2 bot phản ứng:</div>
+    <button class="scenario-btn active" onclick="loadScenario('sunday')">🔴 21h Chủ Nhật 20/09</button>
+    <button class="scenario-btn" onclick="loadScenario('offhours')">🟡 20h Thứ Ba 16/09</button>
+    <button class="scenario-btn" onclick="loadScenario('holiday')">🔴 Quốc Khánh 02/09</button>
+    <button class="scenario-btn" onclick="loadScenario('happy')">✅ 10h Thứ Tư 17/09</button>
+  </div>
+
+  <div class="chat-container">
+    <!-- OLD STOW -->
+    <div class="chat-col old">
+      <div class="chat-col-header">❌ STOW hiện tại (Có lỗi)</div>
+      <div class="chat-messages" id="oldChat"></div>
+      <div class="verdict" id="oldVerdict"></div>
+    </div>
+    <!-- NEW STOW -->
+    <div class="chat-col new">
+      <div class="chat-col-header">✅ STOW + Booking Guard (Đã sửa)</div>
+      <div class="chat-messages" id="newChat"></div>
+      <div class="verdict" id="newVerdict"></div>
+    </div>
+  </div>
+
+  <footer>
+    STOW Booking Policy Guard v1.0 — Prototype bởi Trương Công Anh<br>
+    Product Engineering Intern Application — MyStorage, September 2026
+  </footer>
+
+  <script>
+    // ── Scenario data ────────────────────────────────────────
+    const scenarios = {
+      sunday: {
+        title: '21h Chủ Nhật 20/09/2026 — Kho tự quản 2m³',
+        customer: 'Mình muốn dọn vào lúc 21h tối Chủ Nhật ngày 20/09/2026 nha. Mình thuê kho tự quản 2m³ ở chi nhánh Võ Nguyên Giáp Thủ Đức trong 1 tháng, không cần điều hòa. Bạn chốt đơn và gửi link thanh toán online luôn cho mình nhé.',
+        oldReply: [
+          'Dạ em đã ghi nhận thông tin đặt kho của anh:',
+          '• Loại kho: Kho tự quản (Self Storage) – Non-AC\n• Kích thước: 2m³\n• Chi nhánh: 375 Võ Nguyên Giáp, Thủ Đức\n• Thời hạn thuê: 1 tháng\n• <span class="bug">Thời gian dọn vào: 21:00 Chủ Nhật, 20/09/2026</span>\n• Giá thuê: 1.188.000 đ/tháng (chưa VAT)',
+          'Do lịch dọn vào cách hiện tại hơn 3 ngày, hệ thống chưa thể xuất link thanh toán tự động.\n\nEm đã chuyển thông tin đến CSKH/Sales.',
+          '<span class="bug">⚠️ Bỏ sót: Không cảnh báo Chủ Nhật là ngày nghỉ!</span>\n<span class="bug">⚠️ Bỏ sót: Không nhắc phụ phí ngoài giờ (21h)!</span>\n<span class="bug">⚠️ Bỏ sót: Không hỏi gói bảo hiểm!</span>',
+        ],
+        newReply: [
+          'Dạ em đã ghi nhận thông tin đặt kho của anh.',
+          '<span class="fix">🚫 Ngày 20/09/2026 là Chủ Nhật — MyStorage không hoạt động.</span>\n\nBộ phận CSKH sẽ liên hệ anh vào Thứ Hai (21/09) để sắp xếp lịch dọn vào phù hợp ạ.',
+          '<span class="warn-tag">⏰ Ngoài ra, 21:00 nằm ngoài giờ làm việc (09:00–18:00).</span>\nCó thể phát sinh phụ phí ngoài giờ. CSKH sẽ xác nhận khung giờ chính xác và mức phụ phí cho anh.',
+          '<span class="fix">🛡️ Trước khi chốt đơn, anh vui lòng chọn gói bảo hiểm:</span>\n• Basic (Miễn phí): bồi thường tối đa 10.000.000 VNĐ\n• Silver: tối đa 25.000.000 VNĐ\n• Gold: tối đa 50.000.000 VNĐ\n• Platinum: tối đa 100.000.000 VNĐ\n\nAnh muốn chọn gói nào ạ?',
+        ],
+        oldVerdict: '❌ Xác nhận 21h Chủ Nhật — khách có thể đến kho đóng cửa!',
+        newVerdict: '✅ Chặn ngay — cảnh báo ngày nghỉ + ngoài giờ + hỏi bảo hiểm',
+      },
+
+      offhours: {
+        title: '20h Thứ Ba 16/09/2026 — Kho tự quản 2m³',
+        customer: 'Mình muốn dọn vào lúc 20h tối Thứ Ba ngày 16/09/2026. Thuê kho tự quản 2m³ ở Võ Nguyên Giáp, 1 tháng, không điều hòa nhé.',
+        oldReply: [
+          'Dạ em đã ghi nhận thông tin đặt kho:',
+          '• Kho tự quản 2m³ Non-AC tại 375 Võ Nguyên Giáp\n• <span class="bug">Thời gian dọn vào: 20:00 Thứ Ba, 16/09/2026</span>\n• Giá thuê: 1.188.000 đ/tháng (chưa VAT)',
+          'Em đang tiến hành kiểm tra phòng kho trống...',
+          '<span class="bug">⚠️ Bỏ sót: Không cảnh báo phụ phí ngoài giờ (20h)!</span>\n<span class="bug">⚠️ Bỏ sót: Không hỏi gói bảo hiểm!</span>',
+        ],
+        newReply: [
+          'Dạ em ghi nhận yêu cầu kho tự quản 2m³ tại 375 Võ Nguyên Giáp.',
+          '<span class="warn-tag">⏰ Thời gian 20:00 nằm ngoài giờ làm việc (09:00–18:00).</span>\nCó thể phát sinh phụ phí ngoài giờ. CSKH sẽ xác nhận khung giờ chính xác và mức phụ phí cho anh.',
+          '<span class="fix">🛡️ Trước khi chốt đơn, anh chọn gói bảo hiểm nhé:</span>\n• Basic (Miễn phí): tối đa 10 triệu VNĐ\n• Silver / Gold / Platinum: tối đa 25–100 triệu VNĐ\n\nAnh muốn chọn gói nào ạ?',
+        ],
+        oldVerdict: '❌ Xác nhận 20h mà không báo phụ phí ngoài giờ',
+        newVerdict: '✅ Cảnh báo phụ phí ngoài giờ + hỏi bảo hiểm',
+      },
+
+      holiday: {
+        title: '10h Quốc Khánh 02/09/2026 — Kho tự quản 3m³',
+        customer: 'Mình muốn dọn vào 10h sáng ngày 02/09/2026 (Quốc khánh). Thuê kho tự quản 3m³ ở An Phú, có điều hòa, 3 tháng.',
+        oldReply: [
+          'Dạ em đã ghi nhận:',
+          '• Kho tự quản 3m³ AC tại An Phú\n• <span class="bug">Thời gian dọn vào: 10:00 Thứ Tư, 02/09/2026</span>\n• Thời hạn: 3 tháng',
+          'Em kiểm tra phòng kho trống và báo lại anh nhé!',
+          '<span class="bug">⚠️ Bỏ sót: Không nhận ra 02/09 là ngày Quốc Khánh!</span>',
+        ],
+        newReply: [
+          'Dạ em ghi nhận yêu cầu kho tự quản 3m³ AC tại An Phú.',
+          '<span class="fix">🚫 Ngày 02/09/2026 là ngày Quốc Khánh — MyStorage không hoạt động.</span>\n\nBộ phận CSKH sẽ liên hệ anh vào ngày làm việc tiếp theo để sắp xếp lịch dọn vào phù hợp ạ.',
+          '<span class="fix">🛡️ Trong lúc chờ, anh chọn gói bảo hiểm nhé:</span>\n• Basic (Miễn phí) / Silver / Gold / Platinum',
+        ],
+        oldVerdict: '❌ Xác nhận ngày lễ Quốc Khánh như ngày thường',
+        newVerdict: '✅ Chặn — nhận diện ngày Quốc Khánh và chuyển CSKH',
+      },
+
+      happy: {
+        title: '10h Thứ Tư 17/09/2026 — Kho tự quản 2m³ + Bảo hiểm Basic',
+        customer: 'Mình muốn dọn vào 10h sáng Thứ Tư 17/09/2026. Kho tự quản 2m³ ở Võ Nguyên Giáp, không điều hòa, 1 tháng. Mình chọn gói bảo hiểm Basic nhé.',
+        oldReply: [
+          'Dạ em đã ghi nhận:',
+          '• Kho tự quản 2m³ Non-AC tại 375 Võ Nguyên Giáp\n• Thời gian dọn vào: 10:00 Thứ Tư, 17/09/2026\n• Giá thuê: 1.188.000 đ/tháng (chưa VAT)',
+          'Em đang tạo link thanh toán cho anh...\n\n✅ Link thanh toán đã sẵn sàng!',
+        ],
+        newReply: [
+          'Dạ em đã ghi nhận:',
+          '• Kho tự quản 2m³ Non-AC tại 375 Võ Nguyên Giáp\n• Thời gian dọn vào: 10:00 Thứ Tư, 17/09/2026\n• Giá thuê: 1.188.000 đ/tháng (chưa VAT)\n• Bảo hiểm: Basic (Miễn phí)',
+          '<span class="fix">✅ Tất cả kiểm tra đều hợp lệ!</span>\n\nEm đang tạo link thanh toán cho anh...\n\n✅ Link thanh toán đã sẵn sàng!',
+        ],
+        oldVerdict: '⚠️ Kết quả đúng nhưng thiếu bước hỏi bảo hiểm',
+        newVerdict: '✅ Hợp lệ — đã kiểm tra đầy đủ, cấp link thanh toán',
+      },
+    };
+
+    // ── Render ────────────────────────────────────────────────
+    function renderChat(containerId, customerMsg, botReplies) {
+      const el = document.getElementById(containerId);
+      let html = '';
+
+      // Customer message
+      html += `<div class="msg user">
+        <div class="msg-label">Khách hàng</div>
+        <div class="bubble">${customerMsg}</div>
+      </div>`;
+
+      // Bot replies (with typing animation delay illusion)
+      botReplies.forEach(reply => {
+        html += `<div class="msg bot">
+          <div class="msg-label">STOW</div>
+          <div class="bubble">${reply}</div>
+        </div>`;
+      });
+
+      el.innerHTML = html;
+    }
+
+    function loadScenario(id) {
+      const s = scenarios[id];
+
+      // Update active button
+      document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+
+      // Render chats
+      renderChat('oldChat', s.customer, s.oldReply);
+      renderChat('newChat', s.customer, s.newReply);
+
+      // Verdicts
+      document.getElementById('oldVerdict').textContent = s.oldVerdict;
+      document.getElementById('newVerdict').textContent = s.newVerdict;
+    }
+
+    // Load default scenario
+    loadScenario('sunday');
+  </script>
+</body>
+</html>

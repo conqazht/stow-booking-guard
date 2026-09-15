@@ -1,0 +1,16 @@
+{
+  "name": "stow-booking-guard",
+  "version": "1.0.0",
+  "description": "Booking policy guard & evaluation suite for STOW (stow.mystorage.vn) — fixes schedule policy precedence violation and missing protection plan upsell",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc",
+    "demo": "npx serve web"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
